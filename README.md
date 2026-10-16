@@ -4,6 +4,20 @@ Decoder for Alfa Romeo immobiliser transponder dumps. Given a transponder
 record it recovers the **PIN** and verifies the two **checksum** bytes, from
 either a raw hex line or a `.bin` memory dump.
 
+## Background
+
+The immobiliser control unit (e.g. unit `60622718`) stores its keys in an
+EEPROM. There are **eight memory positions for keys**, each holding one
+transponder record. The records come in two roles:
+
+- **Master key** — the programming key, able to enrol further keys.
+- **Slave key** — an ordinary driving key.
+
+Every record begins with the fixed transponder header `80 21 2C`. A raw EEPROM
+dump of the unit therefore contains several of these records (often with a `0F`
+length marker in front and `00` padding after each). Reading a key's record
+out of that dump gives you the five key bytes this tool needs.
+
 ## Usage
 
 ```bash
@@ -74,6 +88,30 @@ Example — key `E6 11 4A 41 6D`:
 
 When a hex line (or a `.bin` record) includes the two checksum bytes, the tool
 compares them against the computed pair and reports `VALID` or `MISMATCH`.
+
+> The reference notes also mention an alternative first-checksum rule ("OR all
+> bytes and mask `0x80`") used in some variants. This tool implements the
+> XOR / `0x0D` rule, which is the one that reproduces the master and slave
+> checksums in the examples below.
+
+## Worked examples
+
+All verified against the two reference dumps.
+
+| record | key bytes | last 5 nibbles | PIN | checksum |
+|--------|-----------|----------------|-----|----------|
+| Master | `E6 11 4A 41 6D` | `A 4 1 6 D` | 14164 | `9C 63` ✓ |
+| Slave  | `06 59 08 2E 45` | `8 2 E 4 5` | 82545 | `31 CE` ✓ |
+| 145    | `A3 86 83 FA 0E` | `3 F A 0 E` | 36175 | — |
+| 146    | `1E 2A 8E 04 59` | `E 0 4 5 9` | 57459 | — |
+| Code1  | `BF 44 6C 37 34` | `C 3 7 3 4` | 33734 | — |
+
+Checksum worked out for the master and slave records:
+
+```
+Master:  E6^11^4A^41^6D = 91,  91 ^ 0D = 9C,  ~9C = 63   ->  9C 63
+Slave:   06^59^08^2E^45 = 3C,  3C ^ 0D = 31,  ~31 = CE   ->  31 CE
+```
 
 ## Using it as a library
 
